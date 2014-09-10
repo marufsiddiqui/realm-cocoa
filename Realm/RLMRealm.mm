@@ -540,7 +540,7 @@ static void CheckReadWrite(RLMRealm *realm, NSString *msg=@"Cannot write to a re
 }
 
 - (void)addObject:(RLMObject *)object {
-    RLMAddObjectToRealm(object, self, false);
+    RLMAddObjectToRealm(object, self);
 }
 
 - (void)addObjectsFromArray:(id)array {
@@ -550,7 +550,7 @@ static void CheckReadWrite(RLMRealm *realm, NSString *msg=@"Cannot write to a re
 }
 
 - (void)addOrUpdateObject:(RLMObject *)object {
-    RLMAddObjectToRealm(object, self, true);
+    RLMAddObjectToRealm(object, self, RLMSetFlagUpdateOrCreate);
 }
 
 - (void)addOrUpdateObjectsFromArray:(id)array {

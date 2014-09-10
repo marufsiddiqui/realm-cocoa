@@ -222,11 +222,11 @@ static inline void RLMVerifyInWriteTransaction(RLMRealm *realm) {
 }
 
 template<typename F>
-static inline NSUInteger RLMCreateOrGetRowForObject(RLMObjectSchema *schema, F primaryValueGetter, bool tryUpdate, bool &created) {
+static inline NSUInteger RLMCreateOrGetRowForObject(RLMObjectSchema *schema, F primaryValueGetter, RLMSetFlag options, bool &created) {
     // try to get existing row if updating
     size_t rowIndex = tightdb::not_found;
     tightdb::Table &table = *schema->_table;
-    if (tryUpdate) {
+    if (options & RLMSetFlagUpdateOrCreate) {
         // verify primary key
         RLMProperty *primaryProperty = schema.primaryKeyProperty;
         if (!primaryProperty) {
@@ -257,7 +257,7 @@ static inline NSUInteger RLMCreateOrGetRowForObject(RLMObjectSchema *schema, F p
     return rowIndex;
 }
 
-void RLMAddObjectToRealm(RLMObject *object, RLMRealm *realm, bool update) {
+void RLMAddObjectToRealm(RLMObject *object, RLMRealm *realm, RLMSetFlag options) {
     RLMVerifyInWriteTransaction(realm);
 
     // verify that object is standalone
@@ -281,7 +281,7 @@ void RLMAddObjectToRealm(RLMObject *object, RLMRealm *realm, bool update) {
     // get or create row
     bool created;
     auto primaryGetter = [=](RLMProperty *p) { return [object valueForKey:p.getterName]; };
-    object->_row = (*schema->_table)[RLMCreateOrGetRowForObject(schema, primaryGetter, update, created)];
+    object->_row = (*schema->_table)[RLMCreateOrGetRowForObject(schema, primaryGetter, options, created)];
 
     // populate all properties
     for (RLMProperty *prop in schema.properties) {
@@ -302,7 +302,7 @@ void RLMAddObjectToRealm(RLMObject *object, RLMRealm *realm, bool update) {
         // set in table with out validation
         // skip primary key when updating since it doesn't change
         if (created || !prop.isPrimary) {
-            RLMDynamicSet(object, prop, value, prop.isPrimary, update, false);
+            RLMDynamicSet(object, prop, value, options | (prop.isPrimary ? RLMSetFlagEnforceUnique : 0));
         }
     }
 
@@ -311,7 +311,7 @@ void RLMAddObjectToRealm(RLMObject *object, RLMRealm *realm, bool update) {
 }
 
 
-RLMObject *RLMCreateObjectInRealmWithValue(RLMRealm *realm, NSString *className, id value, bool update) {
+RLMObject *RLMCreateObjectInRealmWithValue(RLMRealm *realm, NSString *className, id value, RLMSetFlag options) {
     // verify writable
     RLMVerifyInWriteTransaction(realm);
 
@@ -327,7 +327,7 @@ RLMObject *RLMCreateObjectInRealmWithValue(RLMRealm *realm, NSString *className,
         // get or create our accessor
         bool created;
         auto primaryGetter = [=](RLMProperty *p) { return array[p.column]; };
-        object->_row = (*objectSchema->_table)[RLMCreateOrGetRowForObject(objectSchema, primaryGetter, update, created)];
+        object->_row = (*objectSchema->_table)[RLMCreateOrGetRowForObject(objectSchema, primaryGetter, options, created)];
 
         // populate
         NSArray *props = objectSchema.properties;
@@ -335,7 +335,8 @@ RLMObject *RLMCreateObjectInRealmWithValue(RLMRealm *realm, NSString *className,
             RLMProperty *prop = props[i];
             // skip primary key when updating since it doesn't change
             if (created || !prop.isPrimary) {
-                RLMDynamicSet(object, (RLMProperty *)prop, array[i], prop.isPrimary, update, true);
+                RLMDynamicSet(object, prop, array[i],
+                              options | RLMSetFlagUpdateOrCreate | (prop.isPrimary ? RLMSetFlagEnforceUnique : 0));
             }
         }
     }
@@ -346,13 +347,14 @@ RLMObject *RLMCreateObjectInRealmWithValue(RLMRealm *realm, NSString *className,
         // get or create our accessor
         bool created;
         auto primaryGetter = [=](RLMProperty *p) { return dict[p.name]; };
-        object->_row = (*objectSchema->_table)[RLMCreateOrGetRowForObject(objectSchema, primaryGetter, update, created)];
+        object->_row = (*objectSchema->_table)[RLMCreateOrGetRowForObject(objectSchema, primaryGetter, options, created)];
 
         // populate
         for (RLMProperty *prop in objectSchema.properties) {
             // skip primary key when updating since it doesn't change
             if (created || !prop.isPrimary) {
-                RLMDynamicSet(object, prop, dict[prop.name], prop.isPrimary, update, true);
+                RLMDynamicSet(object, prop, dict[prop.name],
+                              options | RLMSetFlagUpdateOrCreate | (prop.isPrimary ? RLMSetFlagEnforceUnique : 0));
             }
         }
     }
